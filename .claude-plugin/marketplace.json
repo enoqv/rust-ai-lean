@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "rust-ai-lean",
+  "description": "Token-lean Rust development for Claude Code",
+  "owner": { "name": "enoqv" },
+  "plugins": [
+    {
+      "name": "rust-ai-lean",
+      "description": "Spend fewer tokens on Rust: working rust-analyzer LSP, quiet cargo, outline/crate-src/diag tools, and a doctor that checks it all",
+      "version": "0.1.0",
+      "source": "./plugin",
+      "category": "development"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "rust-ai-lean",
+  "version": "0.1.0",
+  "description": "Spend fewer tokens on Rust: working rust-analyzer LSP, quiet cargo, outline/crate-src/diag tools, and a doctor that checks it all",
+  "author": { "name": "enoqv" },
+  "homepage": "https://github.com/enoqv/rust-ai-lean",
+  "license": "MIT OR Apache-2.0"
+}
