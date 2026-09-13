@@ -146,11 +146,13 @@ Doctor then offers the remaining steps: installing the CLI, adding rustup compon
 |---|---|
 | `[rust-ai-lean] Rust project: keep context small.` | always |
 | `Outline before reading: rust-ai-lean outline <file\|dir> gives signatures + line ranges; Read only those ranges, never whole large .rs files.` | `cli_ok` |
-| `Semantic lookups: LSP tool (goToDefinition, findReferences, hover, incomingCalls); load via ToolSearch "select:LSP" if deferred.` | `ra_ok` and SessionStart |
+| `Semantic lookups: LSP tool (goToDefinition, findReferences, hover, incomingCalls); load it with ToolSearch query select:LSP if deferred.` | `ra_ok` and SessionStart |
 | `Crate APIs: rust-ai-lean crate-src <crate> = exact Cargo.lock version source. Do not use Context7/web docs for Rust crate APIs.` | `cli_ok` |
 | `Compile errors: rust-ai-lean diag check -p <pkg>. Never --message-format=short.` | `cli_ok` |
 | `Setup incomplete (<LSP unavailable\|CLI missing>): ask the user to run /rust-ai-lean:doctor.` | `!ra_ok` or `!cli_ok` |
 | `Guide: skill rust-ai-lean:rust-lean.` | always |
+
+Hint lines contain no double quotes or backslashes, so the hook can emit JSON without an escaping step.
 
 - The LSP line is omitted for subagents, because background subagents are reported not to receive the LSP tool.
 - **Budget:** the whole script must finish within 1 second on a typical project, and it runs no cargo commands.
@@ -185,8 +187,10 @@ src/repo.rs
 **Rendering.**
 - Each signature is normalized to one line with `prettyplease` and never truncated.
 - Each line starts with the item's inclusive line range, so the agent can call `Read` with offset/limit or target an LSP position.
+- A range starts at the item's first token after its outer attributes and doc comments, so the start line is where `fn`/`struct`/`pub` appears.
 - `#[cfg(test)]` modules collapse to one summary line.
 - `--docs` adds the first doc-comment line under each item.
+- With `--docs`, the first doc line is printed on the next row with a blank range column.
 
 **Parse failure** (common mid-edit): print `<file>: parse error at L:C; approximate outline` and fall back to a line scan that recognizes item-introducing keywords at line start. Output is still produced.
 
@@ -215,10 +219,10 @@ rust_decimal 1.42.0 (registry+https://github.com/rust-lang/crates.io-index) feat
 
 Runs `cargo <sub> --message-format=json <cargo args>` and renders its output:
 
-- **Errors:** the full `message.rendered` text, keeping `help:` and `note:`. Byte-identical messages are de-duplicated; JSON mode repeats diagnostics per target. Shown in compiler order, at most `N` (default 20, `0` = unlimited), followed by `… +K more errors (use --max-errors 0)`.
+- **Errors:** the full `message.rendered` text, keeping `help:` and `note:`. Byte-identical messages are de-duplicated; JSON mode repeats diagnostics per target. Shown in compiler order, at most `N` (default 20, `0` = unlimited), followed by `… +K more error(s) (use --max-errors 0)`.
 - **Warnings:** printed after all errors, one line each as `path:line:col: warning[code]: message`. Identical lines (the same warning repeated across targets) are printed once and counted in the summary. Warnings at different locations are never merged. `--full-warnings` renders them fully instead, which is useful when fixing clippy suggestions on a narrowed `-p`. **Warnings never consume the error limit.**
 - **Other cargo stderr:** resolver errors, build-script failures, linker errors, and anything else that is not JSON are passed through verbatim. The only lines removed are the known cargo status lines (`Compiling`, `Checking`, `Fresh`, `Finished`, `Blocking`, `Downloading`, `Downloaded`, `Locking`, `Updating`, `Adding`). **Unrecognized output is never dropped.** A stdout line that fails to parse as JSON is also passed through.
-- **Summary** as the final line: `N errors, M warnings (K duplicates merged)`.
+- **Order:** errors, then warnings, then passed-through lines, then the summary line `N errors, M warnings (K duplicates merged)` (singular forms for 1).
 - **Exit code:** cargo's own. Signals propagate.
 - `test` is intentionally unsupported. Test output is handled by `CARGO_TERM_QUIET`.
 
@@ -232,6 +236,7 @@ Runs `cargo <sub> --message-format=json <cargo args>` and renders its output:
 
 | id | Check | Fix offered |
 |---|---|---|
+| `plugin.lib` | `plugin/scripts/lib.sh` exists (FAIL and stop otherwise) | — |
 | `toolchain.rustup` | rustup on `PATH` (WARN if absent; the launcher falls back to `PATH`) | — |
 | `toolchain.ra` | the launcher's resolution succeeds and `rust-analyzer --version` runs | `rustup component add rust-analyzer --toolchain stable` |
 | `toolchain.rust-src` | the project's active toolchain (`rustup show active-toolchain` in the project dir) has `lib/rustlib/src` | `rustup component add rust-src --toolchain <toolchain>` |
@@ -241,6 +246,8 @@ Runs `cargo <sub> --message-format=json <cargo args>` and renders its output:
 | `project.detected` | same detection as the hook (INFO when not a Rust project; the remaining `project.*` checks are then reported as INFO `skipped`) | — |
 | `project.lock` | `Cargo.lock` exists (WARN; `crate-src` needs it; never generated automatically) | — |
 | `project.crate-src` | `rust-ai-lean crate-src` resolves the first direct dependency | — |
+
+`doctor.sh` sets `RUSTUP_AUTO_INSTALL=0` so no check can download a toolchain. `project.lock` and `project.crate-src` are INFO `skipped` when the project directory is not inside a Cargo package (`cargo locate-project --workspace` fails).
 
 **Phase 2 — live checks, performed by the model.** Only the model can call tools.
 
@@ -325,19 +332,25 @@ Contents:
 
 The implementation plan starts with these spikes. Each outcome feeds back into this spec before dependent work begins.
 
-1. The inline `sh -c` launcher in `lspServers` starts rust-analyzer through Claude Code's LSP spawn, with `args` passed as an array.
-2. `SubagentStart` hooks can inject `additionalContext` into the subagent. If not, hints are SessionStart-only.
-3. Skill `paths` frontmatter activates `rust-lean` when `.rs` files are touched. If not, rely on the description and the hint.
-4. Precedence between `rust-analyzer.toml` and the plugin's `initializationOptions`. The README guidance depends on it.
-5. Variables exported through `CLAUDE_ENV_FILE` are visible to Bash commands run by subagents.
+Validated on 2026-09-14 with Claude Code 2.1.270.
+
+| # | Assumption | Result |
+|---|---|---|
+| 1 | Inline `sh -c` launcher starts rust-analyzer | CONFIRMED — `documentSymbol` returned both symbols in the fixture crate |
+| 1b | `${CLAUDE_PLUGIN_ROOT}` expands in `lspServers.command` (informational) | CONFIRMED — a `${CLAUDE_PLUGIN_ROOT}`-based script launcher produced the same result; the inline launcher in §4.1 is kept |
+| 2 | `SubagentStart` can inject `additionalContext` | CONFIRMED — the injected marker appeared in the subagent's own transcript |
+| 3a | Skill `paths` activates on matching files | CONFIRMED — activated when a `.rs` file was read, not when only a `.txt` file was read in the same directory |
+| 3b | `${CLAUDE_SKILL_DIR}` is substituted in SKILL.md | CONFIRMED — a slash command printed the skill's own directory as a substituted absolute path |
+| 3c | `disable-model-invocation` blocks model-initiated use | CONFIRMED — the disabled skill's body never appeared in the transcript when the model tried to invoke it directly |
+| 4 | `rust-analyzer.toml` overrides `initializationOptions` | Plugin settings win — only the plugin-configured target directory was created; the `rust-analyzer.toml` override had no effect |
+| 5 | `CLAUDE_ENV_FILE` exports reach subagent Bash | CONFIRMED — a marker exported by the SessionStart hook was visible in the subagent's Bash output |
+| — | `CLAUDE_PROJECT_DIR` set in SessionStart / SubagentStart hooks | Yes for both — set to the project directory in each hook invocation |
 
 ## 8. Acceptance criteria
 
 1. On a machine where the official `rust-analyzer-lsp` plugin is enabled and the stable toolchain lacks `rust-analyzer`, doctor reports both issues with correct fixes and applies each only after approval. After a new session, doctor reports no FAIL, and `documentSymbol` and `hover` both succeed on a pinned-toolchain project.
-2. `scripts/bench.sh` on the fixtures shows:
-   - `outline` output ≤ 20% of `cat -n` for the multi-signature fixture.
-   - `diag check` preserves every `help:`/`note:` line of every error while dropping all status lines.
-   - Quiet `cargo test` output ≤ 10% of the default for the 300-test fixture, with the failure's panic message intact.
+2. `scripts/bench.sh` shows `rust-ai-lean outline` output ≤ 20% of `cat -n` for this repository's `src/outline.rs`, and quiet `cargo test` output ≤ 10% of the default for its generated 300-test crate.
+   - `tests/diag.rs` proves that `diag` keeps error `help:`/`note:` text while dropping status lines.
 3. The hint stays ≤ 700 bytes in every state, and the hook completes within 1 second on the fixtures.
 4. CI is green on Linux and macOS.
 
