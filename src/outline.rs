@@ -153,12 +153,17 @@ fn item_rows(item: &Item, depth: usize, docs: bool, rows: &mut Vec<Row>) {
             for inner in &t.items {
                 let (start, end) = range_without_attrs(inner);
                 let text = render_trait_item(inner);
+                let doc = if docs {
+                    first_doc_line(&trait_item_attrs(inner))
+                } else {
+                    None
+                };
                 rows.push(Row {
                     start,
                     end,
                     depth: depth + 1,
                     text,
-                    doc: None,
+                    doc,
                 });
             }
         }
@@ -170,12 +175,17 @@ fn item_rows(item: &Item, depth: usize, docs: bool, rows: &mut Vec<Row>) {
             for inner in &i.items {
                 let (start, end) = range_without_attrs(inner);
                 let text = render_impl_item(inner);
+                let doc = if docs {
+                    first_doc_line(&impl_item_attrs(inner))
+                } else {
+                    None
+                };
                 rows.push(Row {
                     start,
                     end,
                     depth: depth + 1,
                     text,
-                    doc: None,
+                    doc,
                 });
             }
         }
@@ -339,6 +349,26 @@ fn item_attrs(item: &Item) -> Vec<Attribute> {
         Item::Const(x) => x.attrs.clone(),
         Item::Static(x) => x.attrs.clone(),
         Item::Type(x) => x.attrs.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn trait_item_attrs(item: &TraitItem) -> Vec<Attribute> {
+    match item {
+        TraitItem::Fn(x) => x.attrs.clone(),
+        TraitItem::Const(x) => x.attrs.clone(),
+        TraitItem::Type(x) => x.attrs.clone(),
+        TraitItem::Macro(x) => x.attrs.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn impl_item_attrs(item: &ImplItem) -> Vec<Attribute> {
+    match item {
+        ImplItem::Fn(x) => x.attrs.clone(),
+        ImplItem::Const(x) => x.attrs.clone(),
+        ImplItem::Type(x) => x.attrs.clone(),
+        ImplItem::Macro(x) => x.attrs.clone(),
         _ => Vec::new(),
     }
 }

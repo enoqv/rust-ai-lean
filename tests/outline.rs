@@ -60,6 +60,12 @@ fn docs_flag_adds_first_doc_line() {
         ),
         "{text}"
     );
+    assert!(
+        text.contains(
+            "  60-71       pub async fn insert_user(conn: &mut Vec<User>, id: &str, name: &str, display_name: Option<&str>, email: Option<&str>) -> Result<User>\n                /// Creates a user.\n"
+        ),
+        "{text}"
+    );
     let plain = stdout(&outline(&["outline", "sample.rs"]));
     assert!(!plain.contains("///"), "{plain}");
 }
