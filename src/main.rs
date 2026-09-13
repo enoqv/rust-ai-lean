@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 mod crate_src;
+mod diag;
 mod outline;
 
 #[derive(Parser)]
@@ -38,6 +39,20 @@ enum Cmd {
         #[arg(long)]
         path_only: bool,
     },
+    /// Run cargo and print compact diagnostics
+    Diag {
+        #[arg(value_enum)]
+        sub: diag::Sub,
+        /// Maximum errors to print; 0 = unlimited
+        #[arg(long, default_value_t = 20)]
+        max_errors: usize,
+        /// Render warnings in full instead of one line each
+        #[arg(long)]
+        full_warnings: bool,
+        /// Arguments passed through to cargo
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        cargo_args: Vec<String>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -49,6 +64,12 @@ fn main() -> ExitCode {
             manifest_path,
             path_only,
         } => crate_src::run(&krate, manifest_path.as_deref(), path_only),
+        Cmd::Diag {
+            sub,
+            max_errors,
+            full_warnings,
+            cargo_args,
+        } => diag::run(sub, max_errors, full_warnings, &cargo_args),
     };
     match result {
         Ok(code) => ExitCode::from(code),
