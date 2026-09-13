@@ -58,6 +58,24 @@ fn no_manifest_exits_2() {
 }
 
 #[test]
+fn missing_manifest_path_exits_2() {
+    let tmp = tempfile::tempdir().unwrap();
+    let missing = tmp.path().join("nope/Cargo.toml");
+    let out = run_in(
+        &fixture("deps"),
+        tmp.path(),
+        &[
+            "crate-src",
+            "itoa",
+            "--manifest-path",
+            missing.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(stderr(&out).contains("does not exist"), "{}", stderr(&out));
+}
+
+#[test]
 fn stale_lock_exits_1_and_leaves_lock_untouched() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("deps");

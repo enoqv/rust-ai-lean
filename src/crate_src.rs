@@ -34,6 +34,12 @@ pub struct Node {
 }
 
 pub fn run(krate: &str, manifest_path: Option<&Path>, path_only: bool) -> anyhow::Result<u8> {
+    if let Some(path) = manifest_path {
+        if !path.exists() {
+            eprintln!("error: manifest path `{}` does not exist", path.display());
+            return Ok(2);
+        }
+    }
     let mut cmd = Command::new("cargo");
     cmd.args(["metadata", "--format-version", "1", "--locked"]);
     if let Some(path) = manifest_path {
