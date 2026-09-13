@@ -68,7 +68,7 @@ fn launcher_prefers_rustup_stable_rust_analyzer() {
         ),
     );
     stub(&bin, "rust-analyzer", "echo path-ra");
-    let (code, out) = launch(&format!("{}:/usr/bin:/bin", bin.display()));
+    let (code, out) = launch(&bin.display().to_string());
     assert_eq!((code, out.trim()), (Some(0), "stable-ra"));
 }
 
@@ -78,7 +78,7 @@ fn launcher_fails_when_rustup_lacks_component() {
     let bin = tmp.path().join("bin");
     stub(&bin, "rustup", "exit 1");
     stub(&bin, "rust-analyzer", "echo proxy-must-not-run");
-    let (code, out) = launch(&format!("{}:/usr/bin:/bin", bin.display()));
+    let (code, out) = launch(&bin.display().to_string());
     assert_eq!(code, Some(1));
     assert!(!out.contains("proxy-must-not-run"));
 }
@@ -88,6 +88,15 @@ fn launcher_uses_path_without_rustup() {
     let tmp = tempfile::tempdir().unwrap();
     let bin = tmp.path().join("bin");
     stub(&bin, "rust-analyzer", "echo path-ra");
-    let (code, out) = launch(&format!("{}:/usr/bin:/bin", bin.display()));
+    let (code, out) = launch(&bin.display().to_string());
     assert_eq!((code, out.trim()), (Some(0), "path-ra"));
+}
+
+#[test]
+fn launcher_fails_when_nothing_is_installed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bin = tmp.path().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let (code, _) = launch(&bin.display().to_string());
+    assert_eq!(code, Some(1));
 }
