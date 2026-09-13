@@ -181,7 +181,7 @@ src/repo.rs
 ```
 
 **Items.**
-- Listed: free functions, structs (fields inline), enums (variant names), unions, traits and their method signatures, impl blocks with their items, modules (recursive), consts and statics (with type), type aliases, `macro_rules!` names.
+- Listed: free functions, structs (fields inline), enums (variant names), unions, traits and their items (method signatures, associated types and consts), impl blocks with their items, modules (recursive), consts and statics (with type), type aliases, `macro_rules!` names.
 - Not listed: `use` items.
 
 **Rendering.**
