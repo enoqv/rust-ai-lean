@@ -58,6 +58,39 @@ assert_eq "$(status_of "$out" cli.installed)" WARN "bare: cli missing"
 assert_eq "$(fix_of "$out" cli.installed)" "cargo install --git https://github.com/enoqv/rust-ai-lean --tag v$version --locked" "bare: install fix"
 assert_eq "$(status_of "$out" env.quiet)" INFO "bare: user value respected"
 
+# Rust project: rust-src, Cargo.lock, and crate-src checks with stubbed tools.
+mkdir -p "$tmp/rustproj" "$tmp/sysroot-ok/lib/rustlib/src/rust/library" "$tmp/sysroot-bare"
+printf '[package]\nname = "demo"\nversion = "0.1.0"\n\n[dependencies]\nitoa = "1"\n' >"$tmp/rustproj/Cargo.toml"
+: >"$tmp/rustproj/Cargo.lock"
+make_stub "$tmp/bin-rs" rustup "case \"\$1 \$2\" in 'which --toolchain') echo $tmp/ra-ok/rust-analyzer ;; 'show active-toolchain') echo 'stable-test (default)' ;; *) exit 1 ;; esac"
+make_stub "$tmp/bin-rs" cargo "[ \"\$1\" = locate-project ] && echo \"\$PWD/Cargo.toml\""
+make_stub "$tmp/bin-rs" rust-ai-lean "case \"\$1\" in --version) echo rust-ai-lean $version ;; crate-src) echo \"\$2\" >$tmp/crate-src-arg; echo /registry/\$2-1.0.0 ;; esac"
+make_stub "$tmp/bin-rs-ok" rustc "echo $tmp/sysroot-ok"
+make_stub "$tmp/bin-rs-bare" rustc "echo $tmp/sysroot-bare"
+
+out=$(run_doctor "$tmp/bin-rs:$tmp/bin-rs-ok:$base_path" "$tmp/rustproj" CARGO_TERM_QUIET=true)
+assert_eq "$(status_of "$out" project.detected)" OK "rust: detected"
+assert_eq "$(status_of "$out" toolchain.rust-src)" OK "rust: rust-src present"
+assert_eq "$(status_of "$out" project.lock)" OK "rust: lock present"
+assert_eq "$(status_of "$out" project.crate-src)" OK "rust: crate-src ok"
+assert_eq "$(cat "$tmp/crate-src-arg")" itoa "rust: first dependency picked"
+
+out=$(run_doctor "$tmp/bin-rs:$tmp/bin-rs-bare:$base_path" "$tmp/rustproj" CARGO_TERM_QUIET=true)
+assert_eq "$(status_of "$out" toolchain.rust-src)" WARN "rust: rust-src missing"
+assert_eq "$(fix_of "$out" toolchain.rust-src)" "rustup component add rust-src --toolchain stable-test" "rust: rust-src fix"
+
+# Dependency declared only as a [dependencies.<name>] table.
+printf '[package]\nname = "demo"\nversion = "0.1.0"\n\n[dependencies.serde]\nversion = "1"\n' >"$tmp/rustproj/Cargo.toml"
+rm -f "$tmp/crate-src-arg"
+out=$(run_doctor "$tmp/bin-rs:$tmp/bin-rs-ok:$base_path" "$tmp/rustproj" CARGO_TERM_QUIET=true)
+assert_eq "$(cat "$tmp/crate-src-arg")" serde "rust: table-form dependency picked"
+
+# No Cargo.lock: WARN and crate-src skipped.
+rm "$tmp/rustproj/Cargo.lock"
+out=$(run_doctor "$tmp/bin-rs:$tmp/bin-rs-ok:$base_path" "$tmp/rustproj" CARGO_TERM_QUIET=true)
+assert_eq "$(status_of "$out" project.lock)" WARN "rust: lock missing"
+assert_eq "$(status_of "$out" project.crate-src)" INFO "rust: crate-src skipped without lock"
+
 # Missing plugin root never crashes.
 out=$(env -i PATH="$base_path" sh "$doctor" --plugin-root "$tmp/nowhere" --project "$tmp/plain" </dev/null)
 assert_eq "$(status_of "$out" plugin.lib)" FAIL "missing lib reported"

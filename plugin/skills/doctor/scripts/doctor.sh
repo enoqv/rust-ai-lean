@@ -134,7 +134,12 @@ check_lock_and_crate_src() {
     report INFO project.crate-src "skipped: CLI not installed"
     return
   fi
+  # First direct dependency, from `name = ...` under [dependencies] or
+  # [workspace.dependencies], or from a [dependencies.name] table header.
   dep=$(awk '
+    /^\[(workspace\.)?dependencies\.[A-Za-z0-9_-]+\]/ {
+      sub(/^\[(workspace\.)?dependencies\./, ""); sub(/\].*/, ""); print; exit
+    }
     /^\[(workspace\.)?dependencies\]/ { in_deps = 1; next }
     /^\[/ { in_deps = 0 }
     in_deps && /^[A-Za-z0-9_-]+[[:space:]]*=/ { sub(/[[:space:]]*=.*/, ""); print; exit }
