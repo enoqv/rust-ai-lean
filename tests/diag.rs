@@ -1,5 +1,8 @@
 mod common;
 
+use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
+
 use common::{fixture, run_in, stdout};
 
 #[test]
@@ -92,4 +95,66 @@ fn non_json_cargo_errors_pass_through() {
         text.contains("BUILD-SCRIPT-MARKER: generator failed"),
         "{text}"
     );
+}
+
+#[test]
+fn own_flags_are_honored_after_cargo_args() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = run_in(
+        &fixture("diag-noisy"),
+        tmp.path(),
+        &["diag", "check", "--all-targets", "--max-errors", "1"],
+    );
+    let text = stdout(&out);
+    assert!(
+        text.contains("… +1 more error (use --max-errors 0)"),
+        "{text}"
+    );
+    assert!(text.ends_with("(27 duplicates merged)\n"), "{text}");
+}
+
+/// Runs `diag` with a stub `cargo` whose body is `script`.
+fn run_with_stub_cargo(script: &str, args: &[&str]) -> std::process::Output {
+    let tmp = tempfile::tempdir().unwrap();
+    let cargo = tmp.path().join("cargo");
+    std::fs::write(&cargo, format!("#!/bin/sh\n{script}\n")).unwrap();
+    std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+    Command::new(env!("CARGO_BIN_EXE_rust-ai-lean"))
+        .args(args)
+        .env("PATH", format!("{}:/usr/bin:/bin", tmp.path().display()))
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn double_dash_and_everything_after_it_reach_cargo() {
+    let out = run_with_stub_cargo(
+        "echo \"ARGS:$*\"",
+        &[
+            "diag",
+            "clippy",
+            "-p",
+            "x",
+            "--",
+            "-D",
+            "warnings",
+            "--max-errors",
+            "2",
+        ],
+    );
+    let text = stdout(&out);
+    assert!(
+        text.contains("ARGS:clippy --message-format=json -p x -- -D warnings --max-errors 2"),
+        "{text}"
+    );
+    assert!(
+        text.ends_with("0 errors, 0 warnings (0 duplicates merged)\n"),
+        "{text}"
+    );
+}
+
+#[test]
+fn signal_termination_exits_128_plus_signal() {
+    let out = run_with_stub_cargo("kill -TERM $$", &["diag", "check"]);
+    assert_eq!(out.status.code(), Some(128 + 15));
 }
