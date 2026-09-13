@@ -4,5 +4,20 @@
   "description": "Spend fewer tokens on Rust: working rust-analyzer LSP, quiet cargo, outline/crate-src/diag tools, and a doctor that checks it all",
   "author": { "name": "enoqv" },
   "homepage": "https://github.com/enoqv/rust-ai-lean",
-  "license": "MIT OR Apache-2.0"
+  "license": "MIT OR Apache-2.0",
+  "lspServers": {
+    "rust-analyzer": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "if command -v rustup >/dev/null 2>&1; then ra=$(rustup which --toolchain stable rust-analyzer) || exit 1; else ra=$(command -v rust-analyzer) || exit 1; fi; exec \"$ra\"",
+        "ra-launch"
+      ],
+      "extensionToLanguage": { ".rs": "rust" },
+      "initializationOptions": {
+        "cargo": { "targetDir": true },
+        "checkOnSave": false
+      }
+    }
+  }
 }
