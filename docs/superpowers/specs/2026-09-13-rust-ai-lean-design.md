@@ -163,21 +163,23 @@ Hint lines contain no double quotes or backslashes, so the hook can emit JSON wi
 All subcommands share these rules:
 - No color and no progress output.
 - Deterministic ordering.
+- If stdout is closed early (for example piped into `head`), the command stops quietly with exit code 0.
 - `--version` prints the shared version.
 - Dependencies: `syn` (`full`), `proc-macro2` (`span-locations`), `prettyplease`, `serde`/`serde_json`, `clap`, `anyhow`.
 - Edition 2024.
 
 #### `outline <path>...`
 
-Accepts files and directories. Directories are walked recursively in sorted order, skipping `target/` and hidden directories. Output example:
+Accepts files and directories. Directories are walked recursively in sorted order, skipping `target/` and hidden directories. Output example (excerpt):
 
 ```
-src/repo.rs
-  9-37     pub async fn insert_user(conn: &mut PgConnection, id: &str, name: &str) -> Result<User, Error>
-  120-260  impl UserService
-  121-130    pub fn new(db: Db) -> Self
-  300-310  pub struct Account { pub name: String, pub balance: i64 }
-  400-620  #[cfg(test)] mod tests  (18 items)
+tests/fixtures/outline/sample.rs
+  14-19     pub struct User { pub id: String, name: String }
+  36-43     pub trait Repository: Send + Sync
+  39-39       fn get(&self, id: &str) -> Option<Self::Item>
+  56-72     impl User
+  60-71       pub async fn insert_user(conn: &mut Vec<User>, id: &str, name: &str, display_name: Option<&str>, email: Option<&str>) -> Result<User>
+  97-103    #[cfg(test)] mod tests  (2 items)
 ```
 
 **Items.**
@@ -203,7 +205,7 @@ src/repo.rs
 Runs `cargo metadata --format-version 1 --locked` and resolves the package or packages named `<crate>` (hyphen/underscore-insensitive) in the resolved graph:
 
 ```
-rust_decimal 1.42.0 (registry+https://github.com/rust-lang/crates.io-index) features=[db-postgres,serde,std]
+itoa 1.0.18 (registry+https://github.com/rust-lang/crates.io-index) features=[]
   <path to crate root>
 ```
 
@@ -212,18 +214,19 @@ rust_decimal 1.42.0 (registry+https://github.com/rust-lang/crates.io-index) feat
 - **Composable:** `--path-only` prints only the paths, one per line.
 - **No Cargo.lock changes:** `--locked` guarantees that. When the lock is stale, cargo's error is printed verbatim with a hint, and the exit code is 1.
 - **Crate not found:** exit 1, listing up to five package names that contain the query as a substring.
-- **No manifest found:** exit 2.
+- **No manifest found:** exit 2, whether cargo's own discovery finds no `Cargo.toml` or a given `--manifest-path` does not exist.
 - **No built-in search:** the skill teaches combining the output with `rg`/`grep` and `outline`.
 
 #### `diag <check|clippy|build> [--max-errors N] [--full-warnings] [-- <cargo args>]`
 
-Runs `cargo <sub> --message-format=json <cargo args>` and renders its output:
+Runs `cargo <sub> --message-format=json <cargo args>`, with `CARGO_TERM_COLOR=never` set for the cargo child, and renders its output:
 
+- **Flags:** `--max-errors N`, `--max-errors=N` and `--full-warnings` are recognized anywhere before a literal `--`; a literal `--` and everything after it go to cargo unchanged. A `--` placed directly after the subcommand is consumed as the separator, so pass rustc flags as `"diag clippy -p <pkg> -- -D warnings"`.
 - **Errors:** the full `message.rendered` text, keeping `help:` and `note:`. Byte-identical messages are de-duplicated; JSON mode repeats diagnostics per target. Shown in compiler order, at most `N` (default 20, `0` = unlimited), followed by `… +K more error(s) (use --max-errors 0)`.
 - **Warnings:** printed after all errors, one line each as `path:line:col: warning[code]: message`. Identical lines (the same warning repeated across targets) are printed once and counted in the summary. Warnings at different locations are never merged. `--full-warnings` renders them fully instead, which is useful when fixing clippy suggestions on a narrowed `-p`. **Warnings never consume the error limit.**
 - **Other cargo stderr:** resolver errors, build-script failures, linker errors, and anything else that is not JSON are passed through verbatim. The only lines removed are the known cargo status lines (`Compiling`, `Checking`, `Fresh`, `Finished`, `Blocking`, `Downloading`, `Downloaded`, `Locking`, `Updating`, `Adding`). **Unrecognized output is never dropped.** A stdout line that fails to parse as JSON is also passed through.
 - **Order:** errors, then warnings, then passed-through lines, then the summary line `N errors, M warnings (K duplicates merged)` (singular forms for 1).
-- **Exit code:** cargo's own. Signals propagate.
+- **Exit code:** cargo's own; when cargo is killed by a signal, 128 + the signal number.
 - `test` is intentionally unsupported. Test output is handled by `CARGO_TERM_QUIET`.
 
 ### 4.4 Skill `doctor`
@@ -285,7 +288,7 @@ Contents:
 
 | Component | Principle |
 |---|---|
-| LSP launcher | Exit non-zero with a one-line stderr reason; doctor turns it into an actionable fix |
+| LSP launcher | Exit non-zero (rustup prints its own reason when the component is missing; the PATH fallback exits silently); doctor turns either into an actionable fix |
 | Hooks | Never break a session: any internal failure exits 0 with no output; env-file write failures are ignored |
 | `outline` | Degrade (approximate outline) instead of failing on syntax errors; continue past unreadable paths and exit 1 at the end |
 | `crate-src` | Surface cargo's own error verbatim; never modify `Cargo.lock` |
