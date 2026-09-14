@@ -1,5 +1,8 @@
 mod common;
 
+use std::io::Read;
+use std::process::{Command, Stdio};
+
 use common::{fixture, run_in, stderr, stdout};
 
 fn outline(args: &[&str]) -> std::process::Output {
@@ -114,4 +117,26 @@ fn unreadable_path_exits_1_but_prints_the_rest() {
     assert_eq!(out.status.code(), Some(1));
     assert!(stderr(&out).contains("missing.rs"));
     assert!(stdout(&out).contains("pub struct Marker"));
+}
+
+#[test]
+fn broken_pipe_stops_quietly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut args = vec!["outline".to_string()];
+    args.extend(std::iter::repeat_n("sample.rs".to_string(), 300));
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rust-ai-lean"))
+        .args(&args)
+        .current_dir(fixture("outline"))
+        .env("CARGO_TARGET_DIR", tmp.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut buf = [0u8; 100];
+    let mut child_stdout = child.stdout.take().unwrap();
+    let _ = child_stdout.read(&mut buf);
+    drop(child_stdout);
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    assert!(!stderr(&out).contains("Broken pipe"), "{}", stderr(&out));
 }

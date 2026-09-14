@@ -1,6 +1,7 @@
 //! `outline`: item signatures with line ranges, bodies omitted.
 
 use std::fs;
+use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use proc_macro2::TokenStream;
@@ -28,9 +29,17 @@ pub fn run(paths: &[PathBuf], docs: bool) -> anyhow::Result<u8> {
             files.push(path.clone());
         }
     }
+    let mut stdout = io::stdout().lock();
     for file in files {
         match fs::read_to_string(&file) {
-            Ok(src) => print!("{}", render_file(&file, &src, docs)),
+            Ok(src) => {
+                if let Err(err) = stdout.write_all(render_file(&file, &src, docs).as_bytes()) {
+                    if err.kind() == ErrorKind::BrokenPipe {
+                        return Ok(0);
+                    }
+                    return Err(err.into());
+                }
+            }
             Err(err) => {
                 eprintln!("{}: {err}", file.display());
                 failed = true;

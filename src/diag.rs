@@ -1,7 +1,7 @@
 //! `diag`: run cargo with JSON diagnostics and print a compact report.
 
 use std::collections::HashSet;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -196,7 +196,15 @@ pub fn run(
         report.stderr_line(&line);
     }
     let status = child.wait()?;
-    print!("{}", report.render(max_errors));
+    if let Err(err) = io::stdout()
+        .lock()
+        .write_all(report.render(max_errors).as_bytes())
+    {
+        if err.kind() == ErrorKind::BrokenPipe {
+            return Ok(0);
+        }
+        return Err(err.into());
+    }
     Ok(exit_code(status))
 }
 
