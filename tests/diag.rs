@@ -158,3 +158,21 @@ fn signal_termination_exits_128_plus_signal() {
     let out = run_with_stub_cargo("kill -TERM $$", &["diag", "check"]);
     assert_eq!(out.status.code(), Some(128 + 15));
 }
+
+#[test]
+fn cargo_color_is_forced_off() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_rust-ai-lean"))
+        .args(["diag", "check"])
+        .current_dir(fixture("diag-noisy"))
+        .env("CARGO_TARGET_DIR", tmp.path())
+        .env("CARGO_TERM_COLOR", "always")
+        .output()
+        .unwrap();
+    let text = stdout(&out);
+    assert!(!text.contains("\u{1b}["), "{text}");
+    assert!(
+        !text.lines().any(|l| l.trim_start().starts_with("Checking")),
+        "{text}"
+    );
+}

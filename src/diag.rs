@@ -176,6 +176,7 @@ pub fn run(
         .arg(sub.as_str())
         .arg("--message-format=json")
         .args(&cargo_args)
+        .env("CARGO_TERM_COLOR", "never")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
