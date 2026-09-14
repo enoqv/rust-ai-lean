@@ -34,7 +34,7 @@ If `${CLAUDE_SKILL_DIR}` was not replaced with a real path, use the base directo
 2. **LSP tool** (`lsp.tool`). If the LSP tool is not in your tool list, load it with ToolSearch query `select:LSP`. Still unavailable: FAIL, "LSP tool unavailable in this session", fix `start a new Claude Code session`.
 3. **documentSymbol** (`lsp.document-symbol`). Skip as INFO unless `project.detected` is OK. Pick a `.rs` file: `src/lib.rs`, else `src/main.rs`, else the first `.rs` path printed by `rust-ai-lean outline .` (or by `find . -name '*.rs' -not -path '*/target/*' | head -n 1` if the CLI is missing). Call LSP `documentSymbol` on it at line 1, character 1.
    - Error saying the server crashed or failed to start: FAIL with the error text; fix is the `toolchain.ra` fix if that row is FAIL, otherwise empty.
-   - Empty result: rust-analyzer may still be indexing. Retry up to 3 times, running `sleep 20` between attempts when allowed. Still empty: WARN "no symbols after 3 attempts".
+   - Empty result: rust-analyzer may still be indexing. Do steps 5 and 6 first, then retry. Between later attempts wait about 20 seconds (if a foreground `sleep` is not allowed, run `sleep 20` as a background command and wait for it). At most 3 attempts in total; still empty: WARN "no symbols after 3 attempts".
    - Symbols returned: OK with the symbol count.
 4. **hover** (`lsp.hover`). Only if step 3 is OK: call LSP `hover` on the name of a function from step 3. OK when a signature is returned, otherwise WARN with the response.
 5. **rust-analyzer processes** (`lsp.processes`). Run `ps -eo rss,args | grep '[r]ust-analyzer'`. INFO with the process count and total RSS in MB.
