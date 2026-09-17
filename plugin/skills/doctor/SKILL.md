@@ -10,6 +10,7 @@ Verify the whole rust-ai-lean setup for the current project, then offer fixes. R
 
 ## Rules
 
+- Print the full results table before you ask the user anything. They decide on fixes with every check visible.
 - Never run a fix without first asking the user about that specific fix.
 - Report faithfully. A check you could not run is WARN with the reason, never OK.
 - Record every result as a row: STATUS (OK, WARN, FAIL, INFO), check id, detail, fix (may be empty).
@@ -42,7 +43,7 @@ If `${CLAUDE_SKILL_DIR}` was not replaced with a real path, use the base directo
 
 ## Phase 3: summary and fixes
 
-Show one table with columns Status, Check, Detail, ordered FAIL, WARN, OK, INFO.
+**Print the results table first, in its own reply.** One row per check from Phases 1 and 2, columns Status, Check, Detail, ordered FAIL, WARN, OK, INFO. Do not call a question tool and do not run a fix until that table is in your reply — even when there is only one failing check, and even when the fix looks obvious.
 
 Then, for each FAIL or WARN row with a non-empty fix, in table order, ask the user whether to apply exactly that fix (use AskUserQuestion when available, one question per fix). Run each approved fix and show its result. A fix of `start a new Claude Code session` is an instruction for the user, not a command.
 
