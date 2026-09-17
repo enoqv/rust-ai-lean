@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Shell tests
+        run: sh tests/shell/run.sh sh
+
+      - name: Shell tests under dash
+        if: runner.os == 'Linux'
+        run: sh tests/shell/run.sh dash
+
+      - name: ShellCheck
+        if: runner.os == 'Linux'
+        run: shellcheck -x -P SCRIPTDIR -s sh plugin/scripts/lib.sh plugin/hooks/session-start.sh plugin/skills/doctor/scripts/doctor.sh scripts/bench.sh tests/shell/*.sh
+
+      - name: No absolute home-directory paths
+        if: runner.os == 'Linux'
+        run: |
+          if git grep -nE '/(home|Users)/[A-Za-z0-9_.-]+/' -- ':!.github/workflows/ci.yml'; then
+            echo "Found an absolute home-directory path in tracked files."
+            exit 1
+          fi
