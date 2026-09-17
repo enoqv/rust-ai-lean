@@ -10,7 +10,8 @@ Verify the whole rust-ai-lean setup for the current project, then offer fixes. R
 
 ## Rules
 
-- Print the full results table before you ask the user anything. They decide on fixes with every check visible.
+- Phase 3 takes two separate replies: the first contains the results table and nothing else, the second starts asking about fixes. Never put a question in the same reply as the table.
+- Ask the user nothing during Phases 1 and 2. Collect results there; questions belong to Phase 3.
 - Never run a fix without first asking the user about that specific fix.
 - Report faithfully. A check you could not run is WARN with the reason, never OK.
 - Record every result as a row: STATUS (OK, WARN, FAIL, INFO), check id, detail, fix (may be empty).
@@ -41,11 +42,13 @@ If `${CLAUDE_SKILL_DIR}` was not replaced with a real path, use the base directo
 5. **rust-analyzer processes** (`lsp.processes`). Run `ps -eo rss,args | grep '[r]ust-analyzer'`. INFO with the process count and total RSS in MB.
 6. **Session hint** (`hook.context`). Skip as INFO unless `project.detected` is OK. OK if this conversation contains context starting with `[rust-ai-lean]`; otherwise WARN "SessionStart hint not seen", fix `start a new Claude Code session`.
 
+When every check above has a result, stop and go to Phase 3. Do not ask the user anything yet.
+
 ## Phase 3: summary and fixes
 
-**Print the results table first, in its own reply.** One row per check from Phases 1 and 2, columns Status, Check, Detail, ordered FAIL, WARN, OK, INFO. Do not call a question tool and do not run a fix until that table is in your reply — even when there is only one failing check, and even when the fix looks obvious.
+**Reply 1 — the table, and nothing else.** One row per check from Phases 1 and 2, columns Status, Check, Detail, ordered FAIL, WARN, OK, INFO. End that reply there: no questions, no fixes, no tool calls — even when only one check failed and its fix looks obvious.
 
-Then, for each FAIL or WARN row with a non-empty fix, in table order, ask the user whether to apply exactly that fix (use AskUserQuestion when available, one question per fix). Run each approved fix and show its result. A fix of `start a new Claude Code session` is an instruction for the user, not a command.
+**Reply 2 onward — the fixes.** Then, for each FAIL or WARN row with a non-empty fix, in table order, ask the user whether to apply exactly that fix (use AskUserQuestion when available, one question per fix). Run each approved fix and show its result. A fix of `start a new Claude Code session` is an instruction for the user, not a command.
 
 ## Phase 4: re-check
 
