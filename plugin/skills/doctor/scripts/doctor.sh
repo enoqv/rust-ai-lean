@@ -48,7 +48,7 @@ check_ra() {
   if [ -n "$ra" ] && ra_version=$("$ra" --version 2>/dev/null); then
     report OK toolchain.ra "$ra_version ($ra)"
   elif $has_rustup; then
-    report FAIL toolchain.ra "rust-analyzer is not installed for the stable toolchain" \
+    report FAIL toolchain.ra "rust-analyzer is not installed for the stable toolchain (this plugin's launcher always uses stable, so one install covers every project)" \
       "rustup component add rust-analyzer --toolchain stable"
   else
     report FAIL toolchain.ra "rust-analyzer not found on PATH; see https://rust-analyzer.github.io/book/installation.html"
